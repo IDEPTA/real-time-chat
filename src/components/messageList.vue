@@ -1,26 +1,35 @@
 <template>
     <div class="wrapper">
-        <div v-if="!isLoading">
-            <p class="message" v-for="message in messageStore.messages" :key="message.id">
-                <span class="message-id">{{ message.id }}</span>
-                <strong class="message-user">{{ message.user.name }}</strong>
-                <span class="message-text">{{ message.message }}</span>
-                <span class="message-date">{{ formatDate(message.created_at) }}</span>
-            </p>
+        <div v-if="!userStore.isAuthenticated">
+            <p>Пожалуйста, войдите в систему, чтобы увидеть сообщения.</p>
         </div>
-        <p v-else>Загрузка...</p> <!-- Индикатор загрузки -->
+        <div v-else>
+            <div v-if="!isLoading">
+                <p class="message" v-for="message in messageStore.messages" :key="message.id">
+                    <span class="message-id">{{ message.id }}</span>
+                    <strong class="message-user">{{ message.user.name }}</strong>
+                    <span class="message-text">{{ message.message }}</span>
+                    <span class="message-date">{{ formatDate(message.created_at) }}</span>
+                </p>
+            </div>
+            <p v-else>Загрузка...</p> <!-- Индикатор загрузки -->
+        </div>
     </div>
 </template>
 
 <script>
 import { onMounted, ref } from 'vue';
 import { useMessageStore } from '../stores/messageStore';
+import { useUserStore } from '../stores/userStore'; // Импортируем userStore
+import { useRouter } from 'vue-router'; // Импортируем useRouter
 import Echo from "laravel-echo";
 import Pusher from "pusher-js";
 
 export default {
     setup() {
         const messageStore = useMessageStore();
+        const userStore = useUserStore(); // Получаем доступ к userStore
+        const router = useRouter(); // Получаем доступ к роутеру
         const isLoading = ref(true); // Переменная для отслеживания состояния загрузки
 
         // Подключаемся к Pusher
@@ -49,13 +58,18 @@ export default {
                 console.log(e);
                 messageStore.addMessage(e);
             }).listen(".chat.delete", e => {
-                messageStore.deleteMessage(e)
+                messageStore.deleteMessage(e);
                 console.log('Сообщение удалено:', e);
             });
 
         // Загружаем сообщения при монтировании
         onMounted(async () => {
-            await messageStore.loadMessages(); // Загружаем сообщения при монтировании компонента
+            if (!userStore.isAuthenticated) { // Проверяем, авторизован ли пользователь
+                console.log('не авторизован');
+                router.push('/login'); // Редирект на страницу логина
+            } else {
+                await messageStore.loadMessages(); // Загружаем сообщения при монтировании компонента
+            }
             isLoading.value = false; // Устанавливаем состояние загрузки в false после загрузки
         });
 
@@ -68,6 +82,7 @@ export default {
         return {
             formatDate,
             messageStore,
+            userStore, // Возвращаем userStore, чтобы использовать его в шаблоне
             isLoading, // Возвращаем переменную состояния загрузки
         };
     },
